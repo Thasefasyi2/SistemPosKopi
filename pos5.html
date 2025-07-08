@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POS Kopi Keliling sederhana joan</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <style>
+    .card {
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .card:hover {
+      transform: scale(1.03);
+    }
+    .gallery {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      padding: 1rem;
+      width: 70%;
+    }
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+    }
+    .keypad button {
+      font-size: 1.5rem;
+      padding: 1rem;
+    }
+    .sidebar {
+      width: 30%;
+      padding: 1rem;
+      border-left: 1px solid #ddd;
+    }
+    .main {
+      display: flex;
+    }
+    .history {
+      margin: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container-fluid mt-3">
+    <h2 class="text-center">POS Kopi Keliling Sederhana joan</h2>
+    <p id="currentTime" class="text-center"></p>
+    <h5 class="text-center" id="totalPendapatan">Total Pendapatan Hari Ini: Rp 0</h5>
+  </div>
+
+  <div class="main">
+    <div class="gallery" id="menuGallery"></div>
+    <div class="sidebar">
+      <h4>Pesanan</h4>
+      <ul class="list-group mb-3" id="orderList"></ul>
+      <p><strong>Subtotal:</strong> <span id="orderTotal">Rp 0</span></p>
+      <button class="btn btn-success w-100 mb-2" onclick="chargeOrder()">Charge</button>
+      <button class="btn btn-secondary w-100" onclick="clearOrder()">Clear</button>
+      <button class="btn btn-warning w-100 mb-2" id="btnModify" onclick="modifyPayment()" style="display:none;">Modifikasi</button>
+      <button class="btn btn-primary w-100 mb-2" id="btnConfirm" onclick="confirmTransaction()" style="display:none;">Konfirmasi Pembelian</button>
+      <p id="previewUang" class="mt-2"></p>
+      <p id="previewKembalian"></p>
+    </div>
+  </div>
+
+  <div class="container history">
+    <h4>Riwayat Penjualan</h4>
+    <button class="btn btn-danger mb-3" onclick="clearHistory()">Clear History</button>
+    <button class="btn btn-success mb-3 ms-2" onclick="exportToExcel()">Export ke Excel</button>
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+            <th>Menu</th>
+            <th>Jumlah</th>
+            <th>Jumlah Total</th>
+            <th>Waktu</th>
+        </tr>
+    </thead>
+      <tbody id="historyTable"></tbody>
+    </table>
+  </div>
+
+  <div class="modal fade" id="inputModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Jumlah Terjual</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center">
+          <div class="form-control mb-3" id="displayJumlah" style="font-size:2rem; height:60px;">0</div>
+          <div class="keypad">
+            <button onclick="appendNumber(1)">1</button>
+            <button onclick="appendNumber(2)">2</button>
+            <button onclick="appendNumber(3)">3</button>
+            <button onclick="appendNumber(4)">4</button>
+            <button onclick="appendNumber(5)">5</button>
+            <button onclick="appendNumber(6)">6</button>
+            <button onclick="appendNumber(7)">7</button>
+            <button onclick="appendNumber(8)">8</button>
+            <button onclick="appendNumber(9)">9</button>
+            <button onclick="clearInput()">C</button>
+            <button onclick="appendNumber(0)">0</button>
+            <button class="btn btn-primary" onclick="addToOrder()">Tambah</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="changeModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Hitung Kembalian</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+      <div class="modal-body text-center">
+        <p><strong>Total Belanja:</strong> <span id="modalTotalBelanja"></span></p>
+        <div class="form-control mb-3" id="displayUang" style="font-size:2rem; height:60px;">0</div>
+        <div class="keypad">
+          <button onclick="appendUang(1)">1</button>
+          <button onclick="appendUang(2)">2</button>
+          <button onclick="appendUang(3)">3</button>
+          <button onclick="appendUang(4)">4</button>
+          <button onclick="appendUang(5)">5</button>
+          <button onclick="appendUang(6)">6</button>
+          <button onclick="appendUang(7)">7</button>
+          <button onclick="appendUang(8)">8</button>
+          <button onclick="appendUang(9)">9</button>
+          <button onclick="clearUangInput()">C</button>
+          <button onclick="appendUang(0)">0</button>
+          <button class="btn btn-primary" onclick="hitungKembalian()">Hitung</button>
+        </div>
+        <div id="hasilKembalian" class="alert alert-info d-none mt-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const menuItems = [
+  // Iced Coffee
+  { name: 'Americano', price: 8000 },
+  { name: 'Es Kopi Gula Aren', price: 10000 },
+  { name: 'Iced Coffee Latte', price: 10000 },
+  { name: 'Es Kopi Salted Caramel', price: 12000 },
+  { name: 'Cinnamon coffe', price: 10000}, 
+  { name: 'Flavored Latte - Salted Caramel', price: 12000 },
+  { name: 'Flavored Latte - Hazelnut', price: 12000 },
+  { name: 'Flavored Latte - Vanilla', price: 12000 },
+
+  // Frappe
+  { name: 'Frappe - Red Velvet', price: 14000 },
+  { name: 'Frappe - Matcha', price: 14000 },
+  { name: 'Frappe - Chocolate', price: 14000 },
+  { name: 'Frappe - Taro', price: 14000 },
+];
+
+    let order = [];
+    let data = JSON.parse(localStorage.getItem("penjualan")) || [];
+    let selectedMenu = null;
+    let jumlahInput = "";
+    let uangInput="";
+
+    function renderMenu() {
+      const gallery = document.getElementById("menuGallery");
+      gallery.innerHTML = "";
+      menuItems.forEach(item => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.style.width = "12rem";
+        card.innerHTML = `
+          <img src="https://via.placeholder.com/150" class="card-img-top" alt="${item.name}">
+          <div class="card-body">
+            <h5 class="card-title">${item.name}</h5>
+            <p class="card-text">Rp ${item.price.toLocaleString()}</p>
+          </div>
+        `;
+        card.onclick = () => openModal(item);
+        gallery.appendChild(card);
+      });
+    }
+
+    function openModal(menu) {
+      selectedMenu = menu;
+      jumlahInput = "";
+      document.getElementById("displayJumlah").textContent = "0";
+      const modal = new bootstrap.Modal(document.getElementById("inputModal"));
+      modal.show();
+    }
+
+    function appendNumber(num) {
+      jumlahInput += num;
+      document.getElementById("displayJumlah").textContent = jumlahInput;
+    }
+
+    function clearInput() {
+      jumlahInput = "";
+      document.getElementById("displayJumlah").textContent = "0";
+    }
+
+    function appendUang(num) {
+      uangInput += num;
+      document.getElementById("displayUang").textContent = uangInput;
+    }
+
+    function clearUangInput() {
+      uangInput = "";
+      document.getElementById("displayUang").textContent = "0";
+    }
+
+
+    function addToOrder() {
+      const jumlah = parseInt(jumlahInput || "0");
+      if (jumlah <= 0 || !selectedMenu) return;
+      const existing = order.find(i => i.name === selectedMenu.name);
+      if (existing) {
+        existing.qty += jumlah;
+      } else {
+        order.push({ name: selectedMenu.name, price: selectedMenu.price, qty: jumlah });
+      }
+      updateOrderDisplay();
+      bootstrap.Modal.getInstance(document.getElementById("inputModal")).hide();
+    }
+
+    function updateOrderDisplay() {
+      const list = document.getElementById("orderList");
+      const totalEl = document.getElementById("orderTotal");
+      list.innerHTML = "";
+      let total = 0;
+      order.forEach((item, index) => {
+        total += item.price * item.qty;
+        const li = document.createElement("li");
+        li.className = "list-group-item d-flex justify-content-between align-items-center";
+        li.innerHTML = `
+          ${item.name} x ${item.qty}
+          <div>
+            <span class="me-3">Rp ${(item.price * item.qty).toLocaleString()}</span>
+            <button class="btn btn-sm btn-danger" onclick="kurangiItem(${index})">-</button>
+          </div>`;
+        list.appendChild(li);
+      });
+      totalEl.textContent = `Rp ${total.toLocaleString()}`;
+    }
+
+    function kurangiItem(index) {
+      if (order[index].qty > 1) {
+        order[index].qty--;
+      } else {
+        order.splice(index, 1);
+      }
+      updateOrderDisplay();
+    }
+
+    function clearOrder() {
+      order = [];
+      updateOrderDisplay();
+    }
+
+    function clearHistory() {
+      if (confirm("Yakin ingin menghapus semua riwayat penjualan?")) {
+        localStorage.removeItem("penjualan");
+        data = [];
+        updateTotalPendapatan();
+        updateHistory();
+      }
+    }
+
+    function updateTotalPendapatan() {
+      let total = 0;
+      const today = new Date().toLocaleDateString("id-ID");
+      data.forEach(transaksi => {
+        if (transaksi.waktu.startsWith(today)) {
+          transaksi.items.forEach(item => {
+            const menuData = menuItems.find(i => i.name === item.menu);
+            if (menuData) total += menuData.price * item.jumlah;
+          });
+        }
+      });
+      document.getElementById("totalPendapatan").textContent = `Total Pendapatan Hari Ini: Rp ${total.toLocaleString()}`;
+    }
+
+    function modifyPayment() {
+      // Reset lalu ulangi proses charge
+      document.getElementById("previewUang").textContent = "";
+      document.getElementById("previewKembalian").textContent = "";
+      document.getElementById("btnModify").style.display = "none";
+      document.getElementById("btnConfirm").style.display = "none";
+      chargeOrder();
+    }
+
+    function confirmTransaction() {
+      const temp = window.transaksiSementara;
+      if (!temp || temp.order.length === 0) {
+        alert("Tidak ada transaksi untuk dikonfirmasi.");
+        return;
+      }
+
+      const now = new Date();
+      const waktu = now.toLocaleString("id-ID");
+      const transaksi = {
+        waktu,
+        items: temp.order.map(item => ({ menu: item.name, jumlah: item.qty }))
+      };
+
+      data.push(transaksi);
+      localStorage.setItem("penjualan", JSON.stringify(data));
+
+      // Reset UI
+      order = [];
+      updateOrderDisplay();
+      updateTotalPendapatan();
+      updateHistory();
+      document.getElementById("previewUang").textContent = "";
+      document.getElementById("previewKembalian").textContent = "";
+      document.getElementById("btnModify").style.display = "none";
+      document.getElementById("btnConfirm").style.display = "none";
+      window.transaksiSementara = null;
+
+      alert("Pembelian berhasil dikonfirmasi!");
+    }
+
+
+
+    function updateClock() {
+      const now = new Date();
+      const hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      const waktu = `${hari[now.getDay()]} ${now.getDate()} ${bulan[now.getMonth()]} ${now.getFullYear()}, ${now.toLocaleTimeString('id-ID')}`;
+      document.getElementById("currentTime").textContent = `Waktu sekarang: ${waktu}`;
+    }
+
+    function updateHistory() {
+    const tbody = document.getElementById("historyTable");
+    tbody.innerHTML = "";
+
+    data.forEach((transaksi, index) => {
+        const pembeli = `Pembeli ${index + 1}`;
+        const waktu = transaksi.waktu;
+        const totalJumlah = transaksi.items.reduce((sum, item) => sum + item.jumlah, 0);
+
+        // Baris header untuk pembeli
+        const headerRow = document.createElement("tr");
+        headerRow.innerHTML = `<td colspan="3"><strong>${pembeli}</strong></td>`;
+        tbody.appendChild(headerRow);
+
+        // Baris untuk tiap menu
+        transaksi.items.forEach((item, idx) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${item.menu}</td>
+            <td>${item.jumlah}</td>
+            <td>${idx === 0 ? totalJumlah : ""}</td>
+            <td>${idx === 0 ? waktu : ""}</td>
+        `;
+        tbody.appendChild(row);
+        });
+
+        // Spacer kosong antar pembeli
+        const spacer = document.createElement("tr");
+        spacer.innerHTML = `<td colspan="4">&nbsp;</td>`;
+        tbody.appendChild(spacer);
+    });
+    }
+
+
+    setInterval(updateClock, 1000);
+
+    window.onload = function () {
+      renderMenu();
+      updateTotalPendapatan();
+      updateClock();
+      updateHistory();
+    }
+
+    function exportToExcel() {
+    const wb = XLSX.utils.book_new();
+
+    // --- Sheet 1: Riwayat Struk Per Pembeli ---
+    const historyData = [["Menu", "Jumlah", "Jumlah Total", "Waktu"]];
+    data.forEach((transaksi, index) => {
+        const pembeli = `Pembeli ${index + 1}`;
+        const waktu = transaksi.waktu;
+        const totalJumlah = transaksi.items.reduce((sum, item) => sum + item.jumlah, 0);
+
+        historyData.push([pembeli, "", "", ""]);
+
+        transaksi.items.forEach((item, idx) => {
+        historyData.push([
+            item.menu,
+            item.jumlah,
+            idx === 0 ? totalJumlah : "",
+            idx === 0 ? waktu : ""
+        ]);
+        });
+
+        historyData.push(["", "", "", ""]); // spacer
+    });
+
+        // Hitung total pendapatan
+    let totalPendapatan = 0;
+    data.forEach(transaksi => {
+      transaksi.items.forEach(item => {
+        const menu = menuItems.find(m => m.name === item.menu);
+        if (menu) totalPendapatan += menu.price * item.jumlah;
+      });
+    });
+
+    // Tambahkan baris total ke akhir data Excel
+    historyData.push(["", "", "", ""]);
+    historyData.push(["TOTAL PENDAPATAN (Rp)", "", "", `Rp ${totalPendapatan.toLocaleString()}`]);
+
+    const wsHistory = XLSX.utils.aoa_to_sheet(historyData);
+
+    XLSX.utils.book_append_sheet(wb, wsHistory, "Struk Pembeli");
+
+    // --- Unduh file Excel ---
+    XLSX.writeFile(wb, "riwayat_penjualan.xlsx");
+    }
+
+    function chargeOrder() {
+      if (order.length === 0) return;
+
+      let total = 0;
+      order.forEach(item => {
+        total += item.price * item.qty;
+      });
+
+      document.getElementById("modalTotalBelanja").textContent = `Rp ${total.toLocaleString()}`;
+      uangInput = "";
+      document.getElementById("displayUang").textContent = "0";
+      document.getElementById("hasilKembalian").classList.add("d-none");
+
+      const modal = new bootstrap.Modal(document.getElementById("changeModal"));
+      modal.show();
+    }
+
+
+    function hitungKembalian() {
+      const uangDiterima = parseInt(uangInput || "0");
+      const totalStr = document.getElementById("modalTotalBelanja").textContent.replace(/[^\d]/g, "");
+      const total = parseInt(totalStr);
+      const kembalian = uangDiterima - total;
+      const hasil = document.getElementById("hasilKembalian");
+
+      // Validasi input
+      if (isNaN(uangDiterima)) {
+        hasil.textContent = "Masukkan nominal uang yang diterima.";
+        hasil.className = "alert alert-warning";
+        hasil.classList.remove("d-none");
+        return;
+      }
+
+      if (kembalian < 0) {
+        hasil.textContent = `Uangnya kurang Rp ${Math.abs(kembalian).toLocaleString()}.`;
+        hasil.className = "alert alert-danger";
+        hasil.classList.remove("d-none");
+        return;
+      }
+
+      // Simpan transaksi ke variabel sementara
+      window.transaksiSementara = {
+        uangDiterima,
+        total,
+        kembalian,
+        order: JSON.parse(JSON.stringify(order))
+      };
+
+      hasil.textContent = `Kembalian: Rp ${kembalian.toLocaleString()}`;
+      hasil.className = "alert alert-success";
+      hasil.classList.remove("d-none");
+
+      // Tampilkan preview di sidebar
+      document.getElementById("previewUang").textContent = `Uang Diterima: Rp ${uangDiterima.toLocaleString()}`;
+      document.getElementById("previewKembalian").textContent = `Kembalian: Rp ${kembalian.toLocaleString()}`;
+      document.getElementById("btnModify").style.display = "block";
+      document.getElementById("btnConfirm").style.display = "block";
+
+      // Tutup modal input uang
+      setTimeout(() => {
+        bootstrap.Modal.getInstance(document.getElementById("changeModal")).hide();
+      }, 1000);
+    }
+
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</body>
+</html>
